@@ -13,7 +13,7 @@ producer_config = {
 producer = Producer(producer_config)
 
 SERVICES = ["payment", "auth", "catalog", "shipping", "notification"]
-LEVELS = ["INFO", "INFO", "INFO", "WARN", "ERROR"] 
+LEVELS = ["ERROR", "ERROR", "ERROR", "WARN", "INFO"]
 TOPIC = "logs-raw"
 
 def delivery_report(err, msg):
