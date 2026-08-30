@@ -3,8 +3,8 @@ import time
 import requests
 from confluent_kafka import Consumer
 
-SLACK_WEBHOOK_URL = "***REMOVED***"
-
+import os
+SLACK_WEBHOOK_URL = os.environ.get("SLACK_WEBHOOK_URL")
 consumer_config = {
     'bootstrap.servers': 'localhost:9092',
     'group.id': 'alert-consumer',

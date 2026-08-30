@@ -4,4 +4,6 @@ __pycache__/
 .env
 .aws/
 *.pem
+loki-forwarder/venv/
+alerting/venv/
 processing/venv/
