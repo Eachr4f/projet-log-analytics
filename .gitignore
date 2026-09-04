@@ -1,9 +1,25 @@
+# Environnements virtuels Python
+*/venv/
 venv/
-__pycache__/
-*.pyc
+
+# Secrets et credentials
 .env
+*.tfvars
 .aws/
 *.pem
-loki-forwarder/venv/
-alerting/venv/
-processing/venv/
+
+# Terraform
+terraform/.terraform/
+terraform/*.tfstate
+terraform/*.tfstate.backup
+
+# Airflow
+airflow/logs/
+airflow/plugins/__pycache__/
+
+# Python
+__pycache__/
+*.pyc
+
+# Checkpoints Spark
+/tmp/checkpoints/
