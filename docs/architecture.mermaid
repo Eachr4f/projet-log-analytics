@@ -1,0 +1,70 @@
+flowchart TB
+
+    subgraph GEN["🖥️ GÉNÉRATION - Local"]
+        A["Générateur de logs<br/><i>Python / Faker</i>"]
+    end
+
+    subgraph LOCAL["🐳 TRAITEMENT TEMPS RÉEL - Local (Docker Compose)"]
+        B["Kafka<br/><i>topic: logs-raw</i><br/><i>+ Kafka UI</i>"]
+        C["Spark Streaming<br/><i>Parsing / Enrichissement</i><br/><i>PySpark</i>"]
+        D["Détection d'anomalies<br/><i>Seuils + Z-score</i>"]
+        E["Kafka<br/><i>topic: logs-anomalies</i>"]
+    end
+
+    subgraph STORAGE["☁️ STOCKAGE & RECHERCHE - Cloud"]
+        F["Stockage objet<br/><i>AWS S3 / GCP Cloud Storage</i><br/><i>Format Parquet</i>"]
+        G["Indexation<br/><i>Elasticsearch / OpenSearch</i><br/><i>ou Grafana Loki</i>"]
+    end
+
+    subgraph VIZ["📊 VISUALISATION & ALERTING - Cloud"]
+        H["Grafana<br/><i>Grafana Cloud (free tier)</i><br/><i>Dashboards temps réel</i>"]
+        I["Alerting<br/><i>AWS Lambda + SNS</i><br/><i>ou Webhook Slack</i>"]
+    end
+
+    subgraph BATCH["⏱️ ORCHESTRATION BATCH - Local / VM Cloud"]
+        J["Apache Airflow"]
+        K["DAG Agrégation<br/><i>Rapports journaliers</i>"]
+        L["DAG Nettoyage<br/><i>Politique de rétention</i>"]
+    end
+
+    subgraph INFRA["🏗️ INFRASTRUCTURE & CI/CD"]
+        M["Git / GitHub"]
+        N["CI/CD<br/><i>GitHub Actions</i><br/><i>Lint, Tests, Build</i>"]
+        O["Sécurité<br/><i>Trivy (scan images)</i><br/><i>GitLeaks (secrets)</i>"]
+        P["Terraform<br/><i>Provisioning IaC</i>"]
+    end
+
+    %% Flux temps réel
+    A -->|"JSON logs"| B
+    B -->|"consumer"| C
+    C -->|"métriques"| D
+    D -->|"si normal"| F
+    D -->|"si normal"| G
+    D -->|"si anomalie"| E
+    E --> I
+    G --> H
+
+    %% Orchestration batch
+    F -.->|"lecture quotidienne"| J
+    J --> K
+    J --> L
+    K -.->|"écrit rapport"| F
+
+    %% Infra / CI-CD
+    M --> N
+    N --> O
+    O -->|"si OK"| P
+    P ==>|"provisionne"| F
+    P ==>|"provisionne"| G
+    P ==>|"provisionne"| I
+    N -.->|"déploie conteneurs"| LOCAL
+
+    classDef local fill:#e8f0fe,stroke:#4285f4,stroke-width:1px,color:#1a1a1a
+    classDef cloud fill:#fef3e0,stroke:#f9a825,stroke-width:1px,color:#1a1a1a
+    classDef batch fill:#e6f4ea,stroke:#34a853,stroke-width:1px,color:#1a1a1a
+    classDef infra fill:#fce4ec,stroke:#e91e63,stroke-width:1px,color:#1a1a1a
+
+    class A,B,C,D,E local
+    class F,G,H,I cloud
+    class J,K,L batch
+    class M,N,O,P infra
