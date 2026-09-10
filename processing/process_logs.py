@@ -1,6 +1,7 @@
 from pyspark.sql import SparkSession
 from pyspark.sql.functions import from_json, col, window, count, avg, sum as spark_sum, when, to_json, struct, lit
 from pyspark.sql.types import StructType, StructField, StringType, DoubleType, IntegerType, TimestampType
+from pyspark.sql.functions import col, to_timestamp
 
 spark = SparkSession.builder \
     .appName("LogProcessor") \
@@ -19,7 +20,7 @@ spark._jsc.hadoopConfiguration().set("fs.s3a.secret.key", os.environ["AWS_SECRET
 spark._jsc.hadoopConfiguration().set("fs.s3a.endpoint", "s3.eu-west-3.amazonaws.com")  # adapte ta région
 
 log_schema = StructType([
-    StructField("timestamp", StringType(), True),
+    StructField("timestamp", DoubleType(), True),
     StructField("service", StringType(), True),
     StructField("level", StringType(), True),
     StructField("message", StringType(), True),
@@ -38,7 +39,7 @@ df_raw = spark.readStream \
 df_parsed = df_raw.selectExpr("CAST(value AS STRING) as json_str") \
     .select(from_json(col("json_str"), log_schema).alias("data")) \
     .select("data.*") \
-    .withColumn("event_time", col("timestamp").cast(TimestampType()))
+    .withColumn("event_time", to_timestamp(col("timestamp")))
 
 # --- Calcul des métriques par fenêtre ---
 metrics = df_parsed \
