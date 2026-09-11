@@ -31,7 +31,7 @@ log_schema = StructType([
 
 df_raw = spark.readStream \
     .format("kafka") \
-    .option("kafka.bootstrap.servers", "localhost:9092") \
+    .option("kafka.bootstrap.servers", "localhost:30092") \
     .option("subscribe", "logs-raw") \
     .option("startingOffsets", "latest") \
     .load()
@@ -79,7 +79,7 @@ anomalies_kafka = anomalies.select(
 
 query_anomalies = anomalies_kafka.writeStream \
     .format("kafka") \
-    .option("kafka.bootstrap.servers", "localhost:9092") \
+    .option("kafka.bootstrap.servers", "localhost:30092") \
     .option("topic", "logs-anomalies") \
     .option("checkpointLocation", "/tmp/checkpoints/anomalies") \
     .outputMode("update") \
