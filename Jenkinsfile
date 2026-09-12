@@ -9,7 +9,6 @@ pipeline {
         stage('Lint Python') {
             steps {
                 sh '''
-                    pip install flake8 --quiet || true
                     flake8 generator/generator.py --max-line-length=120 || true
                     flake8 alerting/alert_consumer.py --max-line-length=120 || true
                 '''
