@@ -67,6 +67,17 @@ services:
     depends_on:
       - nginx
       - kafka
+  jenkins:
+    image: jenkins/jenkins:lts
+    container_name: jenkins
+    ports:
+      - "8082:8080"
+      - "50000:50000"
+    volumes:
+      - jenkins_data:/var/jenkins_home
+      - /var/run/docker.sock:/var/run/docker.sock
+    user: root
 volumes:
   loki_data:
   grafana_data:
+  jenkins_data:
