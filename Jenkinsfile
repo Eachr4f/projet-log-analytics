@@ -1,6 +1,10 @@
 pipeline {
     agent any
 
+    environment {
+        KUBECONFIG = '/var/jenkins_home/.kube/config'
+    }
+
     stages {
         stage('Lint Python') {
             steps {
@@ -23,11 +27,11 @@ pipeline {
 
         stage('Deploy Kafka Topics to K8s') {
             steps {
-                sh 'kubectl apply -f k8s/kafka-nodepool.yaml'
-                sh 'kubectl apply -f k8s/kafka-cluster.yaml'
-                sh 'kubectl apply -f k8s/topic-logs-raw.yaml'
-                sh 'kubectl apply -f k8s/topic-logs-anomalies.yaml'
-                sh 'kubectl get kafkatopics -n kafka'
+                sh 'kubectl --insecure-skip-tls-verify=true apply -f k8s/kafka-nodepool.yaml'
+                sh 'kubectl --insecure-skip-tls-verify=true apply -f k8s/kafka-cluster.yaml'
+                sh 'kubectl --insecure-skip-tls-verify=true apply -f k8s/topic-logs-raw.yaml'
+                sh 'kubectl --insecure-skip-tls-verify=true apply -f k8s/topic-logs-anomalies.yaml'
+                sh 'kubectl --insecure-skip-tls-verify=true get kafkatopics -n kafka'
             }
         }
     }
