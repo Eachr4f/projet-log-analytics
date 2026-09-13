@@ -1,70 +1,80 @@
+%%{init: {'theme': 'dark'}}%%
 flowchart TB
 
-    subgraph GEN["🖥️ GÉNÉRATION - Local"]
-        A["Générateur de logs<br/><i>Python / Faker</i>"]
+    subgraph SOURCE["🌐 SOURCE DE LOGS - Local (Docker)"]
+        NGINX["Nginx<br/><i>Génère de vraies requêtes HTTP</i>"]
+        LOAD["Générateur de charge<br/><i>wrk / hey / curl loop</i>"]
+        FLB["Fluent Bit<br/><i>Parsing + transformation JSON</i>"]
+        LOAD -->|"requêtes"| NGINX
+        NGINX -->|"access.log"| FLB
     end
 
-    subgraph LOCAL["🐳 TRAITEMENT TEMPS RÉEL - Local (Docker Compose)"]
-        B["Kafka<br/><i>topic: logs-raw</i><br/><i>+ Kafka UI</i>"]
-        C["Spark Streaming<br/><i>Parsing / Enrichissement</i><br/><i>PySpark</i>"]
-        D["Détection d'anomalies<br/><i>Seuils + Z-score</i>"]
-        E["Kafka<br/><i>topic: logs-anomalies</i>"]
+    subgraph K8S["☸️ CLUSTER KUBERNETES (Kind)"]
+        direction TB
+        subgraph NSKAFKA["Namespace: kafka"]
+            STRIMZI["Strimzi Operator"]
+            KAFKATOPIC["Kafka<br/><i>KafkaTopic: logs-raw</i><br/><i>KafkaTopic: logs-anomalies</i>"]
+            STRIMZI -.->|"gère"| KAFKATOPIC
+        end
+        subgraph NSOBS["Namespace: observability"]
+            LOKI_K8S["Loki<br/><i>Helm chart</i>"]
+            GRAFANA_K8S["Grafana<br/><i>Helm chart</i>"]
+        end
     end
 
-    subgraph STORAGE["☁️ STOCKAGE & RECHERCHE - Cloud"]
-        F["Stockage objet<br/><i>AWS S3 / GCP Cloud Storage</i><br/><i>Format Parquet</i>"]
-        G["Indexation<br/><i>Elasticsearch / OpenSearch</i><br/><i>ou Grafana Loki</i>"]
+    subgraph LOCAL["🐳 TRAITEMENT - Local (hors cluster)"]
+        SPARK["Spark Streaming<br/><i>Parsing + Métriques + Scoring ML</i>"]
+        ML["Modèle Isolation Forest<br/><i>scikit-learn (joblib)</i>"]
+        SPARK <-->|"score anomalie"| ML
     end
 
-    subgraph VIZ["📊 VISUALISATION & ALERTING - Cloud"]
-        H["Grafana<br/><i>Grafana Cloud (free tier)</i><br/><i>Dashboards temps réel</i>"]
-        I["Alerting<br/><i>AWS Lambda + SNS</i><br/><i>ou Webhook Slack</i>"]
+    subgraph STORAGE["☁️ STOCKAGE & ALERTING - Cloud"]
+        S3["S3<br/><i>Logs archivés + Modèles ML</i>"]
+        SLACK["Alerting Slack<br/><i>Webhook + cooldown</i>"]
     end
 
-    subgraph BATCH["⏱️ ORCHESTRATION BATCH - Local / VM Cloud"]
-        J["Apache Airflow"]
-        K["DAG Agrégation<br/><i>Rapports journaliers</i>"]
-        L["DAG Nettoyage<br/><i>Politique de rétention</i>"]
+    subgraph BATCH["⏱️ ORCHESTRATION - Docker Compose (hors cluster)"]
+        AIRFLOW["Apache Airflow"]
+        DAG1["DAG Agrégation"]
+        DAG2["DAG Nettoyage"]
+        DAG3["DAG Réentraînement ML"]
+        AIRFLOW --> DAG1
+        AIRFLOW --> DAG2
+        AIRFLOW --> DAG3
     end
 
-    subgraph INFRA["🏗️ INFRASTRUCTURE & CI/CD"]
-        M["Git / GitHub"]
-        N["CI/CD<br/><i>GitHub Actions</i><br/><i>Lint, Tests, Build</i>"]
-        O["Sécurité<br/><i>Trivy (scan images)</i><br/><i>GitLeaks (secrets)</i>"]
-        P["Terraform<br/><i>Provisioning IaC</i>"]
+    subgraph CICD["🏗️ CI/CD - Multi-outils"]
+        GIT["Git / GitHub"]
+        GHA["GitHub Actions<br/><i>Lint, Terraform, Secrets</i>"]
+        JENKINS["Jenkins<br/><i>Lint, Terraform, Secrets</i><br/><i>+ Déploiement K8s</i>"]
+        GIT --> GHA
+        GIT --> JENKINS
+        JENKINS ==>|"kubectl apply"| K8S
     end
 
-    %% Flux temps réel
-    A -->|"JSON logs"| B
-    B -->|"consumer"| C
-    C -->|"métriques"| D
-    D -->|"si normal"| F
-    D -->|"si normal"| G
-    D -->|"si anomalie"| E
-    E --> I
-    G --> H
+    FLB -->|"publie JSON"| KAFKATOPIC
+    KAFKATOPIC -->|"NodePort / port-forward"| SPARK
+    SPARK -->|"logs normaux"| S3
+    SPARK -->|"écrit dans"| LOKI_K8S
+    SPARK -->|"si anomalie"| KAFKATOPIC
+    KAFKATOPIC -->|"topic anomalies"| SLACK
+    LOKI_K8S --> GRAFANA_K8S
+    S3 -.->|"lecture quotidienne"| DAG1
+    S3 -.->|"lecture historique"| DAG3
+    DAG1 -.->|"écrit rapport"| S3
+    DAG3 -.->|"écrit nouveau modèle"| S3
+    S3 -.->|"charge modèle"| ML
 
-    %% Orchestration batch
-    F -.->|"lecture quotidienne"| J
-    J --> K
-    J --> L
-    K -.->|"écrit rapport"| F
-
-    %% Infra / CI-CD
-    M --> N
-    N --> O
-    O -->|"si OK"| P
-    P ==>|"provisionne"| F
-    P ==>|"provisionne"| G
-    P ==>|"provisionne"| I
-    N -.->|"déploie conteneurs"| LOCAL
-
+    classDef source fill:#fef3e0,stroke:#f9a825,stroke-width:1px,color:#1a1a1a
+    classDef k8s fill:#e3f2fd,stroke:#1565c0,stroke-width:1px,color:#1a1a1a
     classDef local fill:#e8f0fe,stroke:#4285f4,stroke-width:1px,color:#1a1a1a
-    classDef cloud fill:#fef3e0,stroke:#f9a825,stroke-width:1px,color:#1a1a1a
+    classDef cloud fill:#fce4ec,stroke:#e91e63,stroke-width:1px,color:#1a1a1a
     classDef batch fill:#e6f4ea,stroke:#34a853,stroke-width:1px,color:#1a1a1a
-    classDef infra fill:#fce4ec,stroke:#e91e63,stroke-width:1px,color:#1a1a1a
+    classDef cicd fill:#f3e5f5,stroke:#8e24aa,stroke-width:1px,color:#1a1a1a
 
-    class A,B,C,D,E local
-    class F,G,H,I cloud
-    class J,K,L batch
-    class M,N,O,P infra
+    class NGINX,LOAD,FLB source
+    class STRIMZI,KAFKATOPIC,LOKI_K8S,GRAFANA_K8S k8s
+    class SPARK,ML local
+    class S3,SLACK cloud
+    class AIRFLOW,DAG1,DAG2,DAG3 batch
+    class GIT,GHA,JENKINS cicd
