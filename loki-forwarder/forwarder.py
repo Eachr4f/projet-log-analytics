@@ -6,7 +6,7 @@ from confluent_kafka import Consumer
 LOKI_URL = "http://localhost:3100/loki/api/v1/push"
 
 consumer_config = {
-    'bootstrap.servers': 'localhost:9092',
+    'bootstrap.servers': '192.168.1.9:30092',
     'group.id': 'loki-forwarder',
     'auto.offset.reset': 'latest'
 }

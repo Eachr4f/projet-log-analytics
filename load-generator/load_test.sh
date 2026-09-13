@@ -2,8 +2,7 @@
 
 BASE_URL="http://localhost:8090"
 ROUTES=("/" "/api/users" "/api/orders" "/notfound" "/error" "/slow")
-WEIGHTS=(30 25 25 10 5 5)  # pourcentages approximatifs de répartition
-
+WEIGHTS=(20 15 15 25 15 10)
 echo "Démarrage de la génération de trafic... (Ctrl+C pour arrêter)"
 
 while true; do

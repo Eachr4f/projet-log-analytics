@@ -21,6 +21,10 @@ airflow/plugins/__pycache__/
 __pycache__/
 *.pyc
 
+ml/venv/
+ml/*.parquet
+ml/*.joblib
+
 nginx/logs/
 
 # Checkpoints Spark

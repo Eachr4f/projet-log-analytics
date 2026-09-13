@@ -1,3 +1,10 @@
+import joblib
+import boto3
+import pandas as pd
+import numpy as np
+from pyspark.sql.functions import when
+from pyspark.sql.functions import pandas_udf
+from pyspark.sql.types import BooleanType
 from pyspark.sql import SparkSession
 from pyspark.sql.functions import from_json, col, window, count, avg, sum as spark_sum, when, to_json, struct, lit
 from pyspark.sql.types import StructType, StructField, StringType, DoubleType, IntegerType, TimestampType
@@ -41,6 +48,26 @@ df_parsed = df_raw.selectExpr("CAST(value AS STRING) as json_str") \
     .select("data.*") \
     .withColumn("event_time", to_timestamp(col("timestamp")))
 
+# --- Chargement du modèle ML depuis S3 ---
+BUCKET_NAME = "log-analytics-achraf-2026"
+s3 = boto3.client("s3")
+s3.download_file(BUCKET_NAME, "models/isolation_forest_v1.joblib", "/tmp/isolation_forest_v1.joblib")
+s3.download_file(BUCKET_NAME, "models/scaler_v1.joblib", "/tmp/scaler_v1.joblib")
+
+ml_model = joblib.load("/tmp/isolation_forest_v1.joblib")
+ml_scaler = joblib.load("/tmp/scaler_v1.joblib")
+
+@pandas_udf(BooleanType())
+def is_ml_anomaly(total_logs: pd.Series, avg_latency_ms: pd.Series, error_rate: pd.Series) -> pd.Series:
+    X = pd.DataFrame({
+        "total_logs": total_logs.fillna(0),
+        "avg_latency_ms": avg_latency_ms.fillna(0),
+        "error_rate": error_rate.fillna(0)
+    })
+    X_scaled = ml_scaler.transform(X)
+    predictions = ml_model.predict(X_scaled)  # -1 = anomalie, 1 = normal
+    return pd.Series(predictions == -1)
+
 # --- Calcul des métriques par fenêtre ---
 metrics = df_parsed \
     .withWatermark("event_time", "1 minute") \
@@ -55,16 +82,23 @@ metrics = df_parsed \
     ) \
     .withColumn("error_rate", col("error_count") / col("total_logs"))
 
-# --- Détection d'anomalie : seuil simple sur le taux d'erreur ---
-ANOMALY_THRESHOLD = 0.30  # 30% d'erreurs sur la fenêtre = anomalie
+# --- Détection combinée : seuil fixe OU modèle ML ---
+ANOMALY_THRESHOLD = 0.30
+metrics_with_ml = metrics.withColumn(
+    "ml_anomaly",
+    is_ml_anomaly(col("total_logs"), col("avg_latency_ms"), col("error_rate"))
+)
 
-anomalies = metrics.filter(col("error_rate") > ANOMALY_THRESHOLD) \
-    .withColumn("anomaly_type", lit("high_error_rate")) \
-    .withColumn("window_start", col("window.start").cast(StringType())) \
-    .withColumn("window_end", col("window.end").cast(StringType())) \
-    .select("service", "window_start", "window_end", "total_logs",
-            "error_count", "error_rate", "anomaly_type")
-
+anomalies = metrics_with_ml.filter(
+    (col("error_rate") > ANOMALY_THRESHOLD) | (col("ml_anomaly") == True)
+).withColumn(
+    "anomaly_type",
+    when(col("error_rate") > ANOMALY_THRESHOLD, "high_error_rate")
+    .otherwise("ml_detected_anomaly")
+).withColumn("window_start", col("window.start").cast(StringType())) \
+ .withColumn("window_end", col("window.end").cast(StringType())) \
+ .select("service", "window_start", "window_end", "total_logs",
+         "error_count", "error_rate", "anomaly_type")
 # --- Sortie 1 : afficher les métriques dans la console (comme Jour 2) ---
 query_console = metrics.writeStream \
     .format("console") \
